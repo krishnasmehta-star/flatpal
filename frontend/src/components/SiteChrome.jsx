@@ -21,7 +21,7 @@ export const SiteHeader = () => (
 
 export const SiteFooter = () => (
   <footer className="w-full border-t-2 border-[#2E3340] bg-[#2E3340]">
-    <div className="border-b-2 border-[#2E3340] bg-[#FFA69E]" data-testid="why-emergent-band">
+    <div className="border-b-2 border-[#2E3340] bg-[#B8F2E6]" data-testid="why-emergent-band">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <div>
           <p className="font-display text-xs font-bold uppercase tracking-[0.18em] text-[#2E3340]">A note for the Emergent team</p>
