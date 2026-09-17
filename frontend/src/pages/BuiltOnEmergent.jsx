@@ -9,7 +9,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 // Every number on this page comes from the build log of 17 Sep 2026 and the repo.
 // QA_CHECKS is the number of checks in qa/e2e.py. Update it when checks are added.
-const QA_CHECKS = 88;
+const QA_CHECKS = 93;
 const REPO_URL = "https://github.com/krishnasmehta-star/flatpal";
 
 const stats = [
