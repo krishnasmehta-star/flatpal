@@ -16,7 +16,11 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from matching import rank_matches
 from seed import AREAS, BUDGETS, MOVE_INS, GENDERS, PREFS, SMOKING, PETS, NON_NEG, generate_demo_pool, sample_personas
 
-MONGO_URL = os.environ.get("MONGO_URL") or os.environ.get("MONGODB_URI")
+MONGO_URL = (
+    os.environ.get("MONGO_URL")
+    or os.environ.get("MONGODB_URI")
+    or next((v for k, v in os.environ.items() if k.endswith("MONGODB_URI") and v), None)
+)
 DB_NAME = os.environ.get("DB_NAME", "flatpal")
 _default_data = "/tmp/flatpal-profiles.json" if os.environ.get("VERCEL") else "data/profiles.json"
 DATA_FILE = Path(os.environ.get("DATA_FILE", _default_data))
