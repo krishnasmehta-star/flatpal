@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
@@ -15,7 +16,7 @@ const PHONE_DISPLAY = "+91 98696 51116";
 const PHONE_TEL = "+919869651116";
 
 const timeline = [
-  { year: "2023", text: "Met Kritika on Flat & Flatmates. 150 leads, one questionnaire, one flatmate who stuck." },
+  { year: "2023", text: "Met Kritika on Flat & Flatmates. 25+ leads, one questionnaire, 4 replies, one flatmate who stuck." },
   { year: "2024", text: "FlatPal v1 in a week: GoDaddy site, Google Form, WhatsApp. Three people matched by hand." },
   { year: "2024 to 2026", text: "Paused. Every match took hours and no technical co-founder wanted to build the app for equity." },
   { year: "Sep 2026", text: "v2 built on Emergent in a weekend, exported, finished by hand, live. Matching is automatic." },
@@ -53,6 +54,14 @@ const Frame = ({ src, alt, href, caption, className = "", imgClass = "" }) => (
 export default function About() {
   usePageTitle("FlatPal | About Krishna");
   const scope = useRef(null);
+  const { hash } = useLocation();
+
+  // Footer band on every page links to /about#why-emergent; scroll there once the page has painted.
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.querySelector(hash);
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: canAnimate() ? "smooth" : "auto", block: "start" }), 150);
+  }, [hash]);
 
   useEffect(() => {
     const detach = attachSafetyNet(scope.current, 1500);
@@ -97,7 +106,7 @@ export default function About() {
             Hi, I'm Krishna. I built FlatPal twice. <span className="text-[#FFA69E]">This is the version that works.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-[#FAF3DD] sm:text-xl">
-            Growth and marketing operator in Bangalore, five years across startups and unicorns, zero engineering background. FlatPal is the side project I could not finish in 2024 and finished on Emergent in a weekend in 2026.
+            Growth and marketing operator in Bangalore, 6+ years across startups and unicorns, zero engineering background. FlatPal is the side project I could not finish in 2024 and finished on Emergent in a weekend in 2026.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <CtaButton to="/sample" data-testid="about-sample-cta" className="h-[60px] w-full text-base sm:h-[64px] sm:w-auto sm:px-6">
@@ -117,7 +126,7 @@ export default function About() {
           <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-start">
             <div className="space-y-5 text-lg leading-relaxed text-[#2E3340]">
               <p>
-                I met Kritika on the Facebook group Flat &amp; Flatmates in Bangalore. I had 150 leads and no way to tell who I could actually live with, so before meeting anyone I sent a questionnaire. Kritika filled it in. We have been flatmates since, and her name is on the v1 story because she lived it with me.
+                I met Kritika on the Facebook group Flat &amp; Flatmates in Bangalore. I had 25+ leads and I wanted a flatmate for the long haul, not a stopgap, so before meeting anyone I sent everyone a questionnaire. Only 4 people filled it in. That is when it clicked: the questionnaire was not admin, it was the filter. Kritika was one of the 4. We have been flatmates since, and her name is on the v1 story because she lived it with me.
               </p>
               <p>
                 That questionnaire was the product. In 2024 we turned it into FlatPal v1 in a week: a GoDaddy site, a form, and a promise of five compatible flatmates on WhatsApp within two days. We matched three people, every one of them by hand.
@@ -185,12 +194,12 @@ export default function About() {
         </section>
 
         {/* WHY EMERGENT */}
-        <section className="mt-16">
+        <section id="why-emergent" className="mt-16 scroll-mt-28">
           <h2 className="font-display text-3xl font-extrabold text-[#2E3340] sm:text-4xl">Why I want to do growth at Emergent</h2>
           <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_1fr]">
             <div className="space-y-5 text-lg leading-relaxed text-[#2E3340]">
               <p>
-                I have spent five years on the other side of products like Emergent: building marketing functions from zero, running PLG and onboarding, and getting non-technical people to their first win. FlatPal is me being your user for a weekend and taking notes the whole way.
+                I have spent 6+ years on the other side of products like Emergent: building marketing functions from zero, running PLG and onboarding, and getting non-technical people to their first win. FlatPal is me being your user for a weekend and taking notes the whole way.
               </p>
               <p>
                 The notes are specific. Where the credit balance hides. When the upsell card appears. Why 100 trial credits lands just short of a shipped app. I wrote those up as experiments with hypotheses, not opinions, because that is how I would run them if I were on the team.

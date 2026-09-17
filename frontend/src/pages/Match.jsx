@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const AREAS = ["HSR Layout", "Koramangala", "Indiranagar", "BTM Layout", "Bellandur", "Whitefield", "JP Nagar", "Jayanagar", "Marathahalli", "Sarjapur Road", "Electronic City", "Hebbal", "Other"];
 const BUDGETS = ["under 10k", "10k to 15k", "15k to 20k", "20k to 30k", "30k+"];
 const MOVE_INS = ["ASAP", "within a month", "1 to 3 months", "just exploring"];
-const NON_NEG = ["No smoking indoors", "No pets", "No overnight guests", "Vegetarian kitchen", "Quiet after 11pm"];
 const FOODS = ["Vegetarian", "Eggetarian", "Non-vegetarian", "Vegetarian, fine with non-veg at home"];
 const HABITS = ["Drinking", "420 friendly"];
 const OKAY_WITH = ["Smoking", "Drinking", "420 friendly"];
@@ -240,7 +239,12 @@ export default function Match() {
       const okay = [...form.okay_with];
       for (const h of form.habits) if (!okay.includes(h)) okay.push(h);
       if (form.smoking !== "No" && !okay.includes("Smoking")) okay.push("Smoking");
-      const payload = { ...form, okay_with: okay, age: Number(form.age), whatsapp: normalisePhone(form.whatsapp), email: form.email.trim().toLowerCase() };
+      // Non-negotiables are derived, not asked: strict veg means a veg kitchen, no-pets means no pets, not okay with smoke means no smoking indoors.
+      const nonneg = [];
+      if (form.food === "Vegetarian") nonneg.push("Vegetarian kitchen");
+      if (form.pets === "No pets please") nonneg.push("No pets");
+      if (!okay.includes("Smoking")) nonneg.push("No smoking indoors");
+      const payload = { ...form, okay_with: okay, non_negotiables: nonneg, bio: form.bio || "", age: Number(form.age), whatsapp: normalisePhone(form.whatsapp), email: form.email.trim().toLowerCase() };
       const res = await api.post("/profiles", payload);
       const id = res.data.profile_id;
       const m = await api.get(`/matches/${id}`);
@@ -315,12 +319,6 @@ export default function Match() {
                 </div>
               </Field>
               <Field label="Email" required><div data-anim-field><Input data-testid="input-email" type="email" inputMode="email" autoComplete="email" value={form.email} onBlur={() => markTouched("email")} onChange={(e) => set("email", e.target.value)} placeholder="you@email.com" className="h-12 rounded-xl" aria-invalid={!!showErr("email")} /><FieldError id="err-email" msg={showErr("email")} /></div></Field>
-              <Field label="One line about you">
-                <div data-anim-field>
-                  <Input data-testid="input-bio" maxLength={120} value={form.bio} onChange={(e) => set("bio", e.target.value)} placeholder="Optional, max 120 characters" className="h-12 rounded-xl" />
-                  <p className="mt-1 text-xs text-[#2E3340]">{form.bio.length}/120</p>
-                </div>
-              </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Hometown"><div data-anim-field><Input data-testid="input-hometown" maxLength={40} value={form.hometown} onChange={(e) => set("hometown", e.target.value)} placeholder="Optional" className="h-12 rounded-xl" /></div></Field>
                 <Field label="What do you do"><div data-anim-field><Input data-testid="input-work" maxLength={60} value={form.work} onChange={(e) => set("work", e.target.value)} placeholder="Optional, e.g. Product designer at a startup" className="h-12 rounded-xl" /></div></Field>
@@ -383,6 +381,7 @@ export default function Match() {
           {step === 2 && (
             <>
               <h2 className="rounded-xl bg-[#B8F2E6] px-4 py-3 font-display text-2xl font-bold text-[#2E3340]">How you live</h2>
+              <p className="text-sm text-[#2E3340]/70">Six sliders, then a few taps. Leave a slider in the middle if you are unsure, middle is neutral.</p>
               {SLIDERS.map((s) => (
                 <div key={s.key} data-anim-field className="space-y-2">
                   <Label className="text-base font-semibold text-[#2E3340]">{s.label}</Label>
@@ -424,12 +423,7 @@ export default function Match() {
                   {HAS_PET.map((v) => <Pill key={v} testId={`haspet-${v}`} active={form.has_pet === v} onClick={() => set("has_pet", v)}>{v === "None" ? "No pet" : v}</Pill>)}
                 </div>
               </Field>
-              <Field label="Non-negotiables">
-                <div data-anim-field className="flex flex-wrap gap-2">
-                  {NON_NEG.map((v) => <Pill key={v} testId={`nonneg-${v}`} active={form.non_negotiables.includes(v)} onClick={() => toggle("non_negotiables", v)}>{v}</Pill>)}
-                </div>
-              </Field>
-              <Field label="Deal breakers, pet peeves, what you are looking for">
+              <Field label="Deal breakers, pet peeves, anything a flatmate should know">
                 <div data-anim-field>
                   <textarea data-testid="input-dealbreakers" maxLength={240} rows={3} value={form.deal_breakers} onChange={(e) => set("deal_breakers", e.target.value)} placeholder="Optional. e.g. Dishes done same day. No loud calls after 11. Someone who says hi in the mornings." className="w-full rounded-xl border-2 border-[#2E3340]/40 bg-white px-3 py-2 text-base text-[#2E3340] focus:border-[#2E3340] focus:outline-none" />
                   <p className="mt-1 text-xs text-[#2E3340]">{form.deal_breakers.length}/240</p>
