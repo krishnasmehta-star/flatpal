@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=DM+Sans:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --blush: #FFA69E;
+    --eggshell: #FAF3DD;
+    --aqua: #B8F2E6;
+    --lightblue: #AED9E0;
+    --slate: #5E6472;
+    --ink: #2E3340; /* darker shade of Slate, used for hard-contrast backgrounds and headline text */
+}
+
+body {
+    margin: 0;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #FAF3DD;
+    color: #2E3340;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    letter-spacing: -0.03em;
+}
+
+/* Hard-edge card and button treatment (Pure.app style) */
+.hard { border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+.hard-sm { border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+
+/* Content is visible by default. GSAP animates FROM hidden, never TO hidden. */
+.hero-word, .hero-eyebrow, .hero-sub, .hero-cta, .step-card, .why-col { opacity: 1; }
+
+@layer base {
+    :root {
+        --background: 49 71% 93%;
+        --foreground: 225 9% 40%;
+        --card: 0 0% 100%;
+        --card-foreground: 225 9% 40%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 225 9% 40%;
+        --primary: 5 100% 81%;
+        --primary-foreground: 225 9% 40%;
+        --secondary: 165 68% 84%;
+        --secondary-foreground: 225 9% 40%;
+        --muted: 190 47% 78%;
+        --muted-foreground: 225 9% 40%;
+        --accent: 165 68% 84%;
+        --accent-foreground: 225 9% 40%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 225 9% 40%;
+        --input: 225 9% 40%;
+        --ring: 5 100% 81%;
+        --radius: 0.375rem;
+    }
+}
+
+@layer base {
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+::selection {
+    background: #FFA69E;
+    color: #5E6472;
+}
+
+@keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+@keyframes blobA {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(40px, 30px) scale(1.1); }
+}
+
+@keyframes blobB {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-40px, -30px) scale(1.08); }
+}
+
+@keyframes chippop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+}
