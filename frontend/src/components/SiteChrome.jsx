@@ -21,6 +21,19 @@ export const SiteHeader = () => (
 
 export const SiteFooter = () => (
   <footer className="w-full border-t-2 border-[#2E3340] bg-[#2E3340]">
+    <div className="border-b-2 border-[#2E3340] bg-[#FFA69E]" data-testid="why-emergent-band">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <div>
+          <p className="font-display text-xs font-bold uppercase tracking-[0.18em] text-[#2E3340]">A note for the Emergent team</p>
+          <p className="mt-1 max-w-2xl font-display text-xl font-extrabold leading-tight text-[#2E3340] sm:text-2xl">
+            I built this on Emergent in a weekend to show you how I would do growth for you. Here is why I want the job.
+          </p>
+        </div>
+        <CtaButton to="/about#why-emergent" data-testid="footer-why-emergent" magnetic={false} className="h-[52px] shrink-0 px-6 text-base" style={{ backgroundColor: "#2E3340", color: "#FAF3DD", borderColor: "#2E3340", boxShadow: "4px 4px 0 #FAF3DD" }}>
+          Why I want to do growth at Emergent
+        </CtaButton>
+      </div>
+    </div>
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-12 sm:flex-row sm:items-center sm:justify-between sm:px-8">
       <div className="flex flex-wrap items-center gap-5 text-sm font-semibold">
         <Link to="/about" data-testid="footer-about" className="text-[#FAF3DD] underline-offset-4 hover:underline">About</Link>
