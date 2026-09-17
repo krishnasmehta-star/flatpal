@@ -3,7 +3,7 @@
 import demoPool from "@/lib/demoPool.json";
 import { rankMatches } from "@/lib/matching";
 
-const KEY = "flatpal.preview.profiles.v1";
+const KEY = "flatpal.preview.profiles.v2";
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
 const save = (list) => { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* private mode: keep in memory only */ } };
 let mem = load();
