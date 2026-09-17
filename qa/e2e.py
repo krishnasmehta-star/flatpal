@@ -235,7 +235,7 @@ async def main():
         # Why Emergent band on every page, deep-links to the About section
         check("why-emergent band on results", await page.get_by_test_id("why-emergent-band").is_visible())
         await page.get_by_test_id("footer-why-emergent").click()
-        await page.wait_for_timeout(1500)
+        await page.wait_for_timeout(2500)
         y = await page.evaluate("window.scrollY")
         sec_top = await page.evaluate("document.querySelector('#why-emergent').getBoundingClientRect().top")
         check("footer CTA lands on the Why Emergent section", "/about" in page.url and y > 400 and -200 < sec_top < 300, f"y={y} top={sec_top}")
