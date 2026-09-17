@@ -7,6 +7,18 @@ SMOKING = ["No", "Outside only", "Yes"]
 PETS = ["Love them", "Fine with them", "No pets please"]
 LIFESTYLE_KEYS = ["sleep", "cleanliness", "guests", "wfh", "noise", "cooking"]
 WEIGHTS = {"cleanliness": 0.25, "sleep": 0.20, "guests": 0.15, "noise": 0.15, "wfh": 0.15, "cooking": 0.10}
+FOODS = ["Vegetarian", "Eggetarian", "Non-vegetarian", "Vegetarian, fine with non-veg at home"]
+HABITS = ["Drinking", "420 friendly"]
+OKAY_WITH = ["Smoking", "Drinking", "420 friendly"]
+HAS_PET = ["None", "Cat", "Dog", "Other"]
+ALL_OKAY = list(OKAY_WITH)
+
+FOOD_SCORE = {
+    ("Vegetarian", "Non-vegetarian"): 0.15,
+    ("Vegetarian", "Eggetarian"): 0.6, ("Vegetarian", "Vegetarian, fine with non-veg at home"): 0.9,
+    ("Eggetarian", "Non-vegetarian"): 0.8, ("Eggetarian", "Vegetarian, fine with non-veg at home"): 0.85,
+    ("Non-vegetarian", "Vegetarian, fine with non-veg at home"): 0.8,
+}
 
 SMOKE_SCORE = {
     ("No", "No"): 1.0, ("Outside only", "Outside only"): 1.0, ("Yes", "Yes"): 1.0,
@@ -16,6 +28,24 @@ SMOKE_SCORE = {
 
 def _sym(table, a, b, default):
     return table.get((a, b), table.get((b, a), default))
+
+
+def food_of(p):
+    return p.get("food") or None
+
+
+def habits_of(p):
+    return set(p.get("habits") or [])
+
+
+def okay_of(p):
+    # Legacy and demo profiles without the field are treated as permissive.
+    v = p.get("okay_with")
+    return set(v) if v is not None else set(ALL_OKAY)
+
+
+def pet_of(p):
+    return p.get("has_pet") or "None"
 
 
 def gender_ok(user, cand):
@@ -39,22 +69,51 @@ def nonneg_ok(user, cand):
         nn = holder.get("non_negotiables") or []
         if "No smoking indoors" in nn and other["smoking"] == "Yes":
             return False
-        if "No pets" in nn and other["pets"] == "Love them":
+        if "No pets" in nn and (other["pets"] == "Love them" or pet_of(other) != "None"):
+            return False
+        if "Vegetarian kitchen" in nn and food_of(other) == "Non-vegetarian":
             return False
         return True
     return check(user, cand) and check(cand, user)
 
 
-def passes_hard_filters(user, cand):
+def habits_ok(user, cand):
+    """Symmetric: everything one person does, the other must be okay with."""
+    def check(doer, other):
+        ok = okay_of(other)
+        if doer["smoking"] == "Yes" and "Smoking" not in ok:
+            return False
+        for h in habits_of(doer):
+            if h not in ok:
+                return False
+        if pet_of(doer) != "None" and other["pets"] == "No pets please":
+            return False
+        return True
+    return check(user, cand) and check(cand, user)
+
+
+def food_ok(user, cand):
+    # Food alone never hard-blocks; the "Vegetarian kitchen" non-negotiable is the hard version (see nonneg_ok).
+    return True
+
+
+def passes_hard_filters(user, cand, relax=None):
+    """relax: None, "budget" (two bands apart allowed) or "area" (budget relaxed and any area)."""
     if cand["id"] == user["id"]:
         return False
     if not gender_ok(user, cand):
         return False
-    if not set(user["areas"]) & set(cand["areas"]):
+    if relax != "area" and not set(user["areas"]) & set(cand["areas"]):
         return False
-    if not budget_ok(user["budget"], cand["budget"]):
+    if relax is None and not budget_ok(user["budget"], cand["budget"]):
+        return False
+    if relax is not None and abs(BUDGETS.index(user["budget"]) - BUDGETS.index(cand["budget"])) > 2:
         return False
     if not nonneg_ok(user, cand):
+        return False
+    if not habits_ok(user, cand):
+        return False
+    if not food_ok(user, cand):
         return False
     return True
 
@@ -73,14 +132,27 @@ def move_in_score(a, b):
     return 0.7 if abs(ia - ib) == 1 else 0.4
 
 
+def food_score(a, b):
+    if not a or not b:
+        return 0.7
+    if a == b:
+        return 1.0
+    return _sym(FOOD_SCORE, a, b, 0.5)
+
+
 def soft_score(user, cand):
     ul, cl = user["lifestyle"], cand["lifestyle"]
     sims = {k: 1 - abs(ul[k] - cl[k]) / 4 for k in LIFESTYLE_KEYS}
     lifestyle = sum(WEIGHTS[k] * sims[k] for k in LIFESTYLE_KEYS)
     smoke = _sym(SMOKE_SCORE, user["smoking"], cand["smoking"], 0.5)
+    if user["smoking"] == "Outside only" and "Smoking" not in okay_of(cand):
+        smoke = min(smoke, 0.4)
+    if cand["smoking"] == "Outside only" and "Smoking" not in okay_of(user):
+        smoke = min(smoke, 0.4)
     pets = pets_score(user["pets"], cand["pets"])
     move = move_in_score(user["move_in"], cand["move_in"])
-    final = 100 * (0.70 * lifestyle + 0.10 * smoke + 0.10 * pets + 0.10 * move)
+    food = food_score(food_of(user), food_of(cand))
+    final = 100 * (0.65 * lifestyle + 0.10 * smoke + 0.10 * pets + 0.05 * move + 0.10 * food)
     return int(math.floor(final + 0.5)), sims  # half-up, matches JS Math.round
 
 
@@ -136,6 +208,20 @@ def build_reasons(user, cand, sims, overlap):
     if user["pets"] == cand["pets"]:
         pet_text = {"Love them": "Both love pets", "Fine with them": "Both fine with pets", "No pets please": "Both prefer no pets"}[user["pets"]]
         cands.append((0.78, pet_text))
+    fu, fc = food_of(user), food_of(cand)
+    if fu and fu == fc:
+        food_text = {"Vegetarian": "Both vegetarian", "Eggetarian": "Both eggetarian", "Non-vegetarian": "Both non-vegetarian",
+                     "Vegetarian, fine with non-veg at home": "Both veg, both easy about the kitchen"}[fu]
+        cands.append((0.88, food_text))
+    hu, hc = habits_of(user), habits_of(cand)
+    if "Drinking" in hu and "Drinking" in hc:
+        cands.append((0.7, "Both enjoy a drink"))
+    if "420 friendly" in hu and "420 friendly" in hc:
+        cands.append((0.72, "Both 420 friendly"))
+    if pet_of(cand) != "None" and user["pets"] == "Love them":
+        cands.append((0.82, f"They have a {pet_of(cand).lower()} and you love pets"))
+    if pet_of(user) != "None" and cand["pets"] == "Love them":
+        cands.append((0.82, f"They would love your {pet_of(user).lower()}"))
     # Fallback: similar-but-neutral slider phrasing, only if we still lack reasons
     if len(cands) < 3:
         for k in sorted(LIFESTYLE_KEYS, key=lambda k: -sims[k]):
@@ -153,6 +239,13 @@ def build_reasons(user, cand, sims, overlap):
 
 
 def build_friction(user, cand):
+    fu, fc = food_of(user), food_of(cand)
+    if {fu, fc} == {"Vegetarian", "Non-vegetarian"}:
+        return "Heads up: one of you is vegetarian, the other is not. Talk kitchen rules early"
+    if {fu, fc} == {"Vegetarian", "Eggetarian"}:
+        return "Heads up: one of you is vegetarian, the other eats eggs"
+    if fu == "Vegetarian, fine with non-veg at home" and fc == "Non-vegetarian" or fc == "Vegetarian, fine with non-veg at home" and fu == "Non-vegetarian":
+        return "Heads up: mixed kitchen, veg and non-veg"
     ul, cl = user["lifestyle"], cand["lifestyle"]
     worst, worst_gap = None, 0
     for k in LIFESTYLE_KEYS:
@@ -166,16 +259,31 @@ def build_friction(user, cand):
 
 
 def rank_matches(user, pool, limit=5):
-    passing = [c for c in pool if not c.get("is_sample") and passes_hard_filters(user, c)]
+    candidates = [c for c in pool if not c.get("is_sample")]
+    passing = [c for c in candidates if passes_hard_filters(user, c)]
+    stretch = {}
+    # Never leave someone with an empty page: relax budget by one more band, then area, and label those cards.
+    if len(passing) < limit:
+        ids = {c["id"] for c in passing}
+        for c in candidates:
+            if c["id"] not in ids and passes_hard_filters(user, c, relax="budget"):
+                passing.append(c); ids.add(c["id"]); stretch[c["id"]] = "budget"
+    if len(passing) < limit:
+        for c in candidates:
+            if c["id"] not in ids and passes_hard_filters(user, c, relax="area"):
+                passing.append(c); ids.add(c["id"]); stretch[c["id"]] = "area"
     scored = []
     for c in passing:
         score, sims = soft_score(user, c)
         overlap = [a for a in user["areas"] if a in c["areas"]]
-        scored.append((score, len(overlap), c, sims, overlap))
-    scored.sort(key=lambda x: (-x[0], -x[1], x[2]["first_name"]))
+        # Stretch matches always rank below exact matches
+        tier = 0 if c["id"] not in stretch else (1 if stretch[c["id"]] == "budget" else 2)
+        scored.append((tier, score, len(overlap), c, sims, overlap))
+    scored.sort(key=lambda x: (x[0], -x[1], -x[2], x[3]["first_name"]))
     results = []
     seen = {}
-    for score, _, c, sims, overlap in scored[:limit]:
+    exact_passing = sum(1 for c in passing if c["id"] not in stretch)
+    for _, score, _, c, sims, overlap in scored[:limit]:
         reasons = build_reasons(user, c, sims, overlap)
         key = tuple(reasons)
         if seen.get(key, 0) >= 2 and len(reasons) == 3:
@@ -195,13 +303,21 @@ def rank_matches(user, pool, limit=5):
             "budget": c["budget"],
             "move_in": c["move_in"],
             "bio": c.get("bio", ""),
+            "hometown": c.get("hometown") or "",
+            "work": c.get("work") or "",
+            "food": food_of(c),
+            "habits": sorted(habits_of(c)),
+            "has_pet": pet_of(c),
+            "deal_breakers": c.get("deal_breakers") or "",
+            "photo": c.get("photo") or None,
             "is_demo": bool(c.get("is_demo")),
             "whatsapp": None if c.get("is_demo") else c.get("whatsapp"),
             "score": score,
             "reasons": reasons,
             "friction": build_friction(user, c),
+            "stretch": stretch.get(c["id"]),
         })
-    return results, len(passing)
+    return results, exact_passing
 
 
 def _extra_reasons(user, cand):
@@ -215,5 +331,8 @@ def _extra_reasons(user, cand):
         extras.append("Same budget range")
     if abs(user["age"] - cand["age"]) <= 2:
         extras.append("Around the same age")
-    extras.append(f"Both want {[a for a in user['areas'] if a in cand['areas']][0]}")
+    ov = [a for a in user['areas'] if a in cand['areas']]
+    if ov:
+        extras.append(f"Both want {ov[0]}")
+    extras.append("Similar lifestyle overall")
     return extras

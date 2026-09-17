@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from matching import rank_matches
-from seed import AREAS, BUDGETS, MOVE_INS, GENDERS, PREFS, SMOKING, PETS, NON_NEG, generate_demo_pool, sample_personas
+from seed import AREAS, BUDGETS, MOVE_INS, GENDERS, PREFS, SMOKING, PETS, NON_NEG, FOODS, HABITS, OKAY_WITH, HAS_PET, generate_demo_pool, sample_personas
 
 MONGO_URL = (
     os.environ.get("MONGO_URL")
@@ -67,6 +67,14 @@ class FileStore:
         self._flush()
         return len(ids)
 
+    async def delete_stale_tests(self, before_iso):
+        ids = [k for k, v in self._data.items() if v.get("is_test") and (v.get("created_at") or "") < before_iso]
+        for k in ids:
+            del self._data[k]
+        if ids:
+            self._flush()
+        return len(ids)
+
 
 class MongoStore:
     def __init__(self, url, db):
@@ -95,6 +103,10 @@ class MongoStore:
         r = await self.col.delete_many(kw)
         return r.deleted_count
 
+    async def delete_stale_tests(self, before_iso):
+        r = await self.col.delete_many({"is_test": True, "created_at": {"$lt": before_iso}})
+        return r.deleted_count
+
 
 store = MongoStore(MONGO_URL, DB_NAME) if MONGO_URL else FileStore(DATA_FILE)
 
@@ -102,7 +114,7 @@ store = MongoStore(MONGO_URL, DB_NAME) if MONGO_URL else FileStore(DATA_FILE)
 app = FastAPI(title="FlatPal API")
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
-SEED_VERSION = 2
+SEED_VERSION = 3
 
 
 import asyncio
@@ -123,8 +135,23 @@ async def ensure_seeded(request: Request, call_next):
     return await call_next(request)
 
 
+TEST_DOMAINS = ("@example.com", "@example.org", "@test.com")
+
+
+def is_test_email(e: str) -> bool:
+    return str(e or "").lower().endswith(TEST_DOMAINS)
+
+
 async def seed():
     existing = await store.all()
+    # Test profiles (example.com style emails) never surface for real members. Purge ones older than a day.
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    legacy = [p for p in existing if not p.get("is_demo") and not p.get("is_sample") and not p.get("is_test") and is_test_email(p.get("email"))]
+    for p in legacy:
+        await store.delete_where(id=p["id"])
+    await store.delete_stale_tests(cutoff)
+    existing = [p for p in existing if p not in legacy]
     demo_v = [p for p in existing if p.get("is_demo") and p.get("seed_version") == SEED_VERSION]
     if not demo_v:
         # Replace any older demo pool (v1 had 25 profiles) but keep real users.
@@ -175,6 +202,28 @@ class ProfileIn(BaseModel):
     smoking: Literal["No", "Outside only", "Yes"]
     pets: Literal["Love them", "Fine with them", "No pets please"]
     non_negotiables: List[str] = []
+    food: Literal["Vegetarian", "Eggetarian", "Non-vegetarian", "Vegetarian, fine with non-veg at home"]
+    habits: List[Literal["Drinking", "420 friendly"]] = []
+    okay_with: List[Literal["Smoking", "Drinking", "420 friendly"]] = []
+    has_pet: Literal["None", "Cat", "Dog", "Other"] = "None"
+    hometown: str = Field(default="", max_length=40)
+    work: str = Field(default="", max_length=60)
+    deal_breakers: str = Field(default="", max_length=240)
+    photo: Optional[str] = Field(default=None, max_length=160_000)
+
+    @field_validator("photo")
+    @classmethod
+    def _photo(cls, v):
+        if v in (None, ""):
+            return None
+        if not v.startswith("data:image/jpeg;base64,") and not v.startswith("data:image/webp;base64,"):
+            raise ValueError("Photo must be a JPEG or WebP image")
+        return v
+
+    @field_validator("hometown", "work", "deal_breakers")
+    @classmethod
+    def _strip(cls, v):
+        return " ".join(str(v or "").split())
 
     @field_validator("whatsapp")
     @classmethod
@@ -219,13 +268,19 @@ async def health():
 @app.post("/api/profiles")
 async def create_profile(body: ProfileIn, request: Request):
     ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0].strip()
-    if rate_limited(ip):
+    # Test emails (example.com etc.) are isolated and deduped, so they get a looser limit for QA runs.
+    if rate_limited(ip, limit=120 if is_test_email(body.email) else 10):
         raise HTTPException(429, "Too many profiles from this network. Try again in an hour.")
     doc = body.model_dump()
+    if is_test_email(body.email):
+        # Test profiles are single-instance per email so repeated QA runs do not pile up clones.
+        await store.delete_where(email=body.email.lower())
+    doc["email"] = body.email.lower()
     doc.update({
         "id": str(uuid.uuid4()),
         "is_demo": False,
         "is_sample": False,
+        "is_test": is_test_email(body.email),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     await store.insert(doc)
@@ -246,10 +301,16 @@ async def get_matches(pid: str):
     if not user:
         raise HTTPException(404, "Profile not found")
     pool = await store.all()
+    # Real members never see test profiles; test profiles see demo + other test profiles only.
+    if user.get("is_test"):
+        pool = [p for p in pool if p.get("is_demo") or p.get("is_test") or p.get("is_sample")]
+    else:
+        pool = [p for p in pool if not p.get("is_test")]
     matches, passing = rank_matches(user, pool)
     return {
         "first_name": user["first_name"],
         "is_sample": bool(user.get("is_sample")),
+        "is_test": bool(user.get("is_test")),
         "pool_size": len([p for p in pool if not p.get("is_sample")]),
         "total_passing": passing,
         "matches": matches,

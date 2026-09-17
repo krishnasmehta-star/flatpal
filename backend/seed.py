@@ -13,6 +13,12 @@ SMOKING = ["No", "Outside only", "Yes"]
 PETS = ["Love them", "Fine with them", "No pets please"]
 NON_NEG = ["No smoking indoors", "No pets", "No overnight guests", "Vegetarian kitchen", "Quiet after 11pm"]
 KEYS = ["sleep", "cleanliness", "guests", "wfh", "noise", "cooking"]
+FOODS = ["Vegetarian", "Eggetarian", "Non-vegetarian", "Vegetarian, fine with non-veg at home"]
+HABITS = ["Drinking", "420 friendly"]
+OKAY_WITH = ["Smoking", "Drinking", "420 friendly"]
+HAS_PET = ["None", "Cat", "Dog", "Other"]
+HOMETOWNS = ["Mumbai", "Pune", "Delhi", "Chennai", "Hyderabad", "Kochi", "Jaipur", "Kolkata", "Ahmedabad", "Mysuru",
+             "Mangaluru", "Lucknow", "Indore", "Bhopal", "Nagpur", "Coimbatore", "Chandigarh", "Guwahati", "Goa", "Bengaluru"]
 
 NAMES = [
     "Aarav", "Aditi", "Advait", "Akshay", "Amrita", "Ananya", "Anirudh", "Anjali", "Ankit", "Anusha", "Arjun", "Arnav",
@@ -71,7 +77,7 @@ def _lifestyle(profile_kind, rnd):
     return {k: rnd.choice([1, 2, 3, 3, 4, 5]) for k in KEYS}
 
 
-def generate_demo_pool(seed=42, target=320):
+def generate_demo_pool(seed=42, target=520):
     rnd = random.Random(seed)
     names = NAMES[:]
     rnd.shuffle(names)
@@ -88,7 +94,7 @@ def generate_demo_pool(seed=42, target=320):
         # Areas: primary area cycles through all 13 so each appears >= target/13 times (8),
         # plus one or two random extras.
         primary = cyc(AREAS, i)
-        extras = rnd.sample([a for a in AREAS if a != primary], rnd.choice([1, 2, 2, 3]))
+        extras = rnd.sample([a for a in AREAS if a != primary], rnd.choice([2, 2, 3, 3]))
         areas = [primary] + extras
         gender = rnd.choices(GENDERS, weights=[42, 42, 8, 8])[0]
         # Mostly "Any" so the pool stays matchable, with guaranteed coverage of the other two.
@@ -97,13 +103,28 @@ def generate_demo_pool(seed=42, target=320):
             pref = "Any"
         smoking = rnd.choices(SMOKING, weights=[60, 30, 10])[0]
         pets = cyc(PETS, i + rnd.randint(0, 2))
-        nn = rnd.sample(NON_NEG, rnd.choice([1, 1, 2])) if rnd.random() < 0.25 else []
+        nn = rnd.sample(NON_NEG, rnd.choice([1, 1, 2])) if rnd.random() < 0.20 else []
         lifestyle = _lifestyle(kinds[i], rnd)
         # Keep non-negotiables consistent with the profile's own habits
         if "No smoking indoors" in nn and smoking == "Yes":
             smoking = "Outside only"
         if "No pets" in nn and pets == "Love them":
             pets = "Fine with them"
+        food = rnd.choices(FOODS, weights=[18, 12, 40, 30])[0]
+        if "Vegetarian kitchen" in nn:
+            food = rnd.choice(["Vegetarian", "Eggetarian"])
+        habits = [h for h, pct in (("Drinking", 42), ("420 friendly", 8)) if rnd.random() * 100 < pct]
+        okay = [o for o, pct in (("Smoking", 66), ("Drinking", 95), ("420 friendly", 62)) if rnd.random() * 100 < pct]
+        # People are okay with what they do themselves
+        for h in habits:
+            if h not in okay:
+                okay.append(h)
+        if smoking != "No" and "Smoking" not in okay:
+            okay.append("Smoking")
+        has_pet = "None"
+        if pets != "No pets please" and "No pets" not in nn and rnd.random() < 0.10:
+            has_pet = rnd.choices(["Cat", "Dog", "Other"], weights=[45, 45, 10])[0]
+        bio = BIOS[i % len(BIOS)]
         profiles.append({
             "id": str(uuid.UUID(int=rnd.getrandbits(128))),
             "first_name": names[i % len(names)] if i < len(names) else f"{names[i % len(names)]} {rnd.choice('ABCDGHJKMNPRSTV')}.",
@@ -118,6 +139,13 @@ def generate_demo_pool(seed=42, target=320):
             "smoking": smoking,
             "pets": pets,
             "non_negotiables": nn,
+            "food": food,
+            "habits": habits,
+            "okay_with": okay,
+            "has_pet": has_pet,
+            "hometown": rnd.choice(HOMETOWNS),
+            "work": bio.split(".")[0].split(",")[0].strip(),
+            "deal_breakers": "",
             "whatsapp": None,
             "email": None,
             "is_demo": True,
@@ -132,26 +160,31 @@ SAMPLE_PERSONAS = [
      "move_in": "within a month", "flatmate_gender_pref": "Women only",
      "lifestyle": {"sleep": 5, "cleanliness": 5, "guests": 2, "wfh": 4, "noise": 2, "cooking": 5},
      "smoking": "No", "pets": "Fine with them", "non_negotiables": [],
+     "food": "Vegetarian, fine with non-veg at home", "habits": ["Drinking"], "okay_with": ["Drinking"], "has_pet": "None", "hometown": "Pune", "work": "Product designer",
      "bio": "Sample persona. Night owl, spotless kitchen, cooks most days."},
     {"first_name": "Sample Arjun", "age": 29, "gender": "Man", "areas": ["Indiranagar", "Whitefield"], "budget": "20k to 30k",
      "move_in": "ASAP", "flatmate_gender_pref": "Any",
      "lifestyle": {"sleep": 1, "cleanliness": 2, "guests": 5, "wfh": 1, "noise": 5, "cooking": 1},
      "smoking": "Outside only", "pets": "Love them", "non_negotiables": [],
+     "food": "Non-vegetarian", "habits": ["Drinking"], "okay_with": ["Smoking", "Drinking", "420 friendly"], "has_pet": "Dog", "hometown": "Delhi", "work": "Sales at a fintech",
      "bio": "Sample persona. Early bird, hosts often, orders in."},
     {"first_name": "Sample Meera", "age": 24, "gender": "Woman", "areas": ["BTM Layout", "JP Nagar", "Jayanagar"], "budget": "10k to 15k",
      "move_in": "1 to 3 months", "flatmate_gender_pref": "Any",
      "lifestyle": {"sleep": 3, "cleanliness": 3, "guests": 3, "wfh": 3, "noise": 3, "cooking": 3},
      "smoking": "No", "pets": "No pets please", "non_negotiables": ["Quiet after 11pm"],
+     "food": "Vegetarian", "habits": [], "okay_with": ["Drinking"], "has_pet": "None", "hometown": "Mysuru", "work": "Chartered accountant",
      "bio": "Sample persona. Middle of the road on everything, wants quiet after 11."},
     {"first_name": "Sample Kabir", "age": 31, "gender": "Non-binary", "areas": ["Bellandur", "Sarjapur Road"], "budget": "30k+",
      "move_in": "just exploring", "flatmate_gender_pref": "Any",
      "lifestyle": {"sleep": 5, "cleanliness": 5, "guests": 1, "wfh": 5, "noise": 1, "cooking": 5},
      "smoking": "No", "pets": "Love them", "non_negotiables": [],
+     "food": "Eggetarian", "habits": ["420 friendly"], "okay_with": ["Drinking", "420 friendly"], "has_pet": "Cat", "hometown": "Kochi", "work": "Founder, two-person startup",
      "bio": "Sample persona. WFH every day, spotless, cooks, loves pets."},
     {"first_name": "Sample Rhea", "age": 27, "gender": "Woman", "areas": ["Hebbal", "Marathahalli"], "budget": "under 10k",
      "move_in": "ASAP", "flatmate_gender_pref": "Women only",
      "lifestyle": {"sleep": 1, "cleanliness": 2, "guests": 5, "wfh": 1, "noise": 5, "cooking": 1},
      "smoking": "Yes", "pets": "Fine with them", "non_negotiables": [],
+     "food": "Non-vegetarian", "habits": ["Drinking", "420 friendly"], "okay_with": ["Smoking", "Drinking", "420 friendly"], "has_pet": "None", "hometown": "Kolkata", "work": "Journalist",
      "bio": "Sample persona. Early bird, lively home, smokes."},
 ]
 
