@@ -60,7 +60,11 @@ export default function About() {
   useEffect(() => {
     if (!hash) return;
     const el = document.querySelector(hash);
-    if (el) setTimeout(() => el.scrollIntoView({ behavior: canAnimate() ? "smooth" : "auto", block: "start" }), 150);
+    if (!el) return;
+    // Twice: once on paint, once after lazy images above have loaded and shifted the layout.
+    const t1 = setTimeout(() => el.scrollIntoView({ behavior: canAnimate() ? "smooth" : "auto", block: "start" }), 150);
+    const t2 = setTimeout(() => el.scrollIntoView({ behavior: "auto", block: "start" }), 1400);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [hash]);
 
   useEffect(() => {
