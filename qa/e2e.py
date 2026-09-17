@@ -284,6 +284,12 @@ async def main():
         about_txt = await page.locator("body").inner_text()
         check("about has contact details", "krishna.s.mehta@gmail.com" in about_txt and "98696 51116" in about_txt)
         check("about links v1 site and notion", (await page.locator('a[href="https://flatpal.godaddysites.com/"]').count()) >= 1 and (await page.locator('a[href*="notion.site"]').count()) >= 1)
+        await page.evaluate("[...document.querySelectorAll('main img')].forEach(i => { i.loading = 'eager'; })")
+        try:
+            await page.evaluate("Promise.all([...document.querySelectorAll('main img')].map(i => i.complete ? 1 : new Promise(r => { i.onload = i.onerror = r; })))", )
+        except Exception:
+            pass
+        await page.wait_for_timeout(500)
         imgs_ok = await page.evaluate("[...document.querySelectorAll('main img')].every(i => i.complete && i.naturalWidth > 0)")
         check("about images all load", imgs_ok)
         check("footer credit is Krishna only", "Built by Krishna Mehta" in about_txt and "Krishna Mehta & Kritika" not in about_txt)
