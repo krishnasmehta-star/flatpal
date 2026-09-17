@@ -114,7 +114,7 @@ store = MongoStore(MONGO_URL, DB_NAME) if MONGO_URL else FileStore(DATA_FILE)
 app = FastAPI(title="FlatPal API")
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
-SEED_VERSION = 3
+SEED_VERSION = 4
 
 
 import asyncio

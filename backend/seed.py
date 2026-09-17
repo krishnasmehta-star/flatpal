@@ -13,6 +13,18 @@ SMOKING = ["No", "Outside only", "Yes"]
 PETS = ["Love them", "Fine with them", "No pets please"]
 NON_NEG = ["No smoking indoors", "No pets", "No overnight guests", "Vegetarian kitchen", "Quiet after 11pm"]
 KEYS = ["sleep", "cleanliness", "guests", "wfh", "noise", "cooking"]
+
+FEMALE = ["Aditi", "Amrita", "Ananya", "Anjali", "Anusha", "Avni", "Bhavana", "Charu", "Deepa", "Divya", "Esha", "Gauri",
+          "Harini", "Ira", "Jhanvi", "Kavya", "Keerthi", "Kritika", "Lakshmi", "Mahima", "Meera", "Mihika", "Nandini", "Neha",
+          "Niharika", "Nitya", "Pallavi", "Pooja", "Prachi", "Priya", "Rhea", "Riya", "Roshni", "Ruchi", "Sakshi", "Sanjana",
+          "Sara", "Shreya", "Shruti", "Simran", "Sneha", "Sonali", "Sruthi", "Swati", "Tanvi", "Tara", "Trisha", "Uma", "Vidya",
+          "Yamini", "Zara", "Zoya", "Ayesha", "Devika", "Hema", "Ishita", "Lavanya", "Manisha", "Rakshita", "Tanya", "Vaishnavi",
+          "Bindu", "Dhanya", "Jyoti", "Lekha"]
+MALE = ["Aarav", "Advait", "Akshay", "Anirudh", "Ankit", "Arjun", "Arnav", "Ashwin", "Chaitanya", "Darshan", "Dev", "Dhruv",
+        "Farhan", "Gautam", "Harsh", "Ishaan", "Jai", "Kabir", "Madhav", "Manav", "Mohit", "Naveen", "Nikhil", "Om", "Parth",
+        "Pranav", "Rahul", "Raghav", "Rohan", "Sahil", "Samar", "Sid", "Soham", "Suhas", "Tejas", "Uday", "Varun", "Vedant",
+        "Vikram", "Vinay", "Yash", "Aman", "Bhuvan", "Chirag", "Girish", "Karan", "Nakul", "Pavan", "Sagar", "Yogesh", "Aakash",
+        "Hrithik", "Kunal", "Kiran"]
 FOODS = ["Vegetarian", "Eggetarian", "Non-vegetarian", "Vegetarian, fine with non-veg at home"]
 HABITS = ["Drinking", "420 friendly"]
 OKAY_WITH = ["Smoking", "Drinking", "420 friendly"]
@@ -79,9 +91,23 @@ def _lifestyle(profile_kind, rnd):
 
 def generate_demo_pool(seed=42, target=520):
     rnd = random.Random(seed)
-    names = NAMES[:]
-    rnd.shuffle(names)
+    fem, male = FEMALE[:], MALE[:]
+    rnd.shuffle(fem); rnd.shuffle(male)
+    used = {"Woman": 0, "Man": 0, "x": 0}
     profiles = []
+
+    def pick_name(gender):
+        # Names follow gender so a card never reads "Nandini, Man". Unisex-ish picks for non-binary / undisclosed.
+        if gender == "Woman":
+            lst, key = fem, "Woman"
+        elif gender == "Man":
+            lst, key = male, "Man"
+        else:
+            used["x"] += 1
+            lst, key = (fem, "Woman") if used["x"] % 2 == 0 else (male, "Man")
+        i = used[key]; used[key] += 1
+        base = lst[i % len(lst)]
+        return base if i < len(lst) else f"{base} {'ABCDGHJKMNPRSTV'[(i // len(lst) - 1) % 15]}."
 
     # Build cyclic sequences so each categorical value appears evenly.
     def cyc(lst, i):
@@ -127,7 +153,7 @@ def generate_demo_pool(seed=42, target=520):
         bio = BIOS[i % len(BIOS)]
         profiles.append({
             "id": str(uuid.UUID(int=rnd.getrandbits(128))),
-            "first_name": names[i % len(names)] if i < len(names) else f"{names[i % len(names)]} {rnd.choice('ABCDGHJKMNPRSTV')}.",
+            "first_name": pick_name(gender),
             "age": rnd.randint(22, 34),
             "gender": gender,
             "bio": BIOS[i % len(BIOS)],
