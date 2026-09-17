@@ -27,7 +27,13 @@ export const SiteFooter = () => (
         <Link to="/built-on-emergent" data-testid="footer-emergent" className="text-[#FAF3DD] underline-offset-4 hover:underline">Built on Emergent</Link>
         <Link to="/sample" data-testid="footer-sample" className="text-[#FAF3DD] underline-offset-4 hover:underline">See a sample match</Link>
       </div>
-      <p className="text-sm text-[#FAF3DD]">FlatPal by Krishna Mehta &amp; Kritika, Bangalore</p>
+      <div className="text-sm text-[#FAF3DD]" data-testid="footer-credit">
+        <p className="font-semibold">Built by Krishna Mehta, Bangalore</p>
+        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+          <a href="mailto:krishna.s.mehta@gmail.com" className="underline-offset-4 hover:underline">krishna.s.mehta@gmail.com</a>
+          <a href="tel:+919869651116" className="underline-offset-4 hover:underline">+91 98696 51116</a>
+        </p>
+      </div>
     </div>
   </footer>
 );
