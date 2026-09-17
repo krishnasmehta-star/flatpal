@@ -2,7 +2,7 @@ import { SiteHeader, SiteFooter } from "@/components/SiteChrome";
 import { CtaButton } from "@/components/CtaButton";
 import { usePageTitle } from "@/lib/motion";
 
-// Draft copy. Krishna edits this before launch. Numbers are from the actual build log on 17 Sep 2026.
+// Numbers are from the actual build log, 17 Sep 2026.
 const sections = [
   {
     title: "Why I built this on Emergent",
