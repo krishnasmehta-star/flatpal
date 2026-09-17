@@ -8,6 +8,7 @@ import { DotCanvas } from "@/components/DotCanvas";
 import { CtaButton } from "@/components/CtaButton";
 import { api } from "@/lib/api";
 import { prefersReducedMotion, canAnimate, usePageTitle, attachSafetyNet } from "@/lib/motion";
+import { assignAvatars } from "@/lib/avatar";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -20,7 +21,7 @@ const avatarColors = ["#FFA69E", "#B8F2E6", "#AED9E0"];
 const waLink = (m) =>
   `https://wa.me/91${m.whatsapp}?text=Hi%20${encodeURIComponent(m.first_name)}%2C%20FlatPal%20matched%20us%20at%20${m.score}%25.%20Want%20to%20chat%3F`;
 
-function MatchCard({ m, i }) {
+function MatchCard({ m, i, avatar }) {
   const ref = useRef(null);
   const numRef = useRef(null);
 
@@ -62,9 +63,15 @@ function MatchCard({ m, i }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl font-display text-lg font-bold text-[#2E3340]" style={{ backgroundColor: avatarColors[i % avatarColors.length] }}>
-            {m.first_name?.[0]?.toUpperCase()}
-          </span>
+          {m.photo ? (
+            <img src={m.photo} alt="" data-testid={`photo-${i + 1}`} className="h-14 w-14 shrink-0 rounded-xl border-2 border-[#2E3340] object-cover" />
+          ) : avatar ? (
+            <img src={avatar} alt="" data-testid={`avatar-${i + 1}`} data-gender={m.gender} className="h-14 w-14 shrink-0 rounded-xl border-2 border-[#2E3340] object-cover" loading="lazy" />
+          ) : (
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border-2 border-[#2E3340] font-display text-lg font-bold text-[#2E3340]" style={{ backgroundColor: avatarColors[i % avatarColors.length] }}>
+              {m.first_name?.[0]?.toUpperCase()}
+            </span>
+          )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-[#2E3340]">#{i + 1}</span>
@@ -74,6 +81,9 @@ function MatchCard({ m, i }) {
               )}
             </div>
             <p className="text-sm text-[#2E3340]">{m.gender}</p>
+            {(m.work || m.hometown) && (
+              <p className="mt-0.5 text-sm text-[#2E3340]/80" data-testid={`meta-${i + 1}`}>{[m.work, m.hometown ? `from ${m.hometown}` : ""].filter(Boolean).join(" · ")}</p>
+            )}
           </div>
         </div>
         <div className="flex items-baseline gap-1 text-right">
@@ -84,7 +94,18 @@ function MatchCard({ m, i }) {
         </div>
       </div>
 
+      {m.stretch && (
+        <div className="mt-4 rounded-lg border-2 border-dashed border-[#2E3340] bg-[#FAF3DD] px-3 py-2 text-sm text-[#2E3340]" data-testid={`stretch-${i + 1}`}>
+          {m.stretch === "budget" ? "Stretch match: their budget is two bands from yours. Fewer exact matches in your area right now." : "Stretch match: different area, close on everything else. Fewer exact matches right now."}
+        </div>
+      )}
       {m.bio && <p className="mt-4 text-base italic text-[#2E3340]">"{m.bio}"</p>}
+      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[#2E3340]">
+        {m.food && <span className="rounded-full border border-[#2E3340]/30 px-2.5 py-1">{m.food === "Vegetarian, fine with non-veg at home" ? "Veg, easy kitchen" : m.food}</span>}
+        {(m.habits || []).map((h) => <span key={h} className="rounded-full border border-[#2E3340]/30 px-2.5 py-1">{h === "Drinking" ? "Drinks" : "420 friendly"}</span>)}
+        {m.has_pet && m.has_pet !== "None" && <span className="rounded-full border border-[#2E3340]/30 px-2.5 py-1">Has a {m.has_pet.toLowerCase()}</span>}
+      </div>
+      {m.deal_breakers && <p className="mt-3 text-sm text-[#2E3340]"><span className="font-semibold">Deal breakers:</span> {m.deal_breakers}</p>}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {m.areas.map((a) => (
@@ -193,6 +214,7 @@ export default function Results() {
   }
 
   const { first_name, pool_size, matches, total_passing, is_sample } = data;
+  const avatars = assignAvatars(matches);
 
   return (
     <div className="relative min-h-screen bg-[#FAF3DD]">
@@ -230,15 +252,17 @@ export default function Results() {
 
           <TooltipProvider>
             <div className="mt-8 space-y-5">
-              {matches.map((m, i) => <MatchCard key={m.id} m={m} i={i} />)}
+              {matches.map((m, i) => <MatchCard key={m.id} m={m} i={i} avatar={avatars[i]} />)}
             </div>
           </TooltipProvider>
 
           {!is_sample && (
-            <p className="mt-8 text-center text-sm text-[#2E3340]" data-testid="pool-note">
-              Your profile is now in the pool. Others may be matched with you.
-            </p>
+            <div className="mt-8 text-center text-sm text-[#2E3340]" data-testid="pool-note">
+              <p>Your profile is now in the pool. Others may be matched with you.</p>
+              <Link to="/match" data-testid="edit-answers" className="mt-2 inline-block font-semibold underline underline-offset-4">Edit my answers and rematch</Link>
+            </div>
           )}
+          <p className="mt-6 text-center text-xs text-[#2E3340]/70">Demo profiles use AI-generated photos. Real members show initials until they add a photo.</p>
         </main>
         <SiteFooter />
       </div>

@@ -27,7 +27,7 @@ const sections = [
       "The multi-step form only swapped step content after the user scrolled, so the lifestyle questions were invisible unless you happened to scroll. The agent's own test report said the frontend flow worked. The backend claim (17 of 17 tests) was accurate. The frontend claim was not.",
       "The design pass set every headline word, subhead and button to opacity 0 for an entrance animation and then never finished the animation, so the entire site looked like it had a grey overlay. Fixed by making content visible by default, animating from hidden rather than to hidden, and adding a 1.5 second safety net that forces everything to full opacity.",
       "Match reasons were generic and repeated on every card. Rewritten to be value-specific: both night owls, both keep it spotless, both want HSR Layout.",
-      "The demo pool of 25 could not guarantee five matches for every combination of area, budget, gender preference and non-negotiables. It is now 320 generated profiles, tested against 400 random synthetic users, minimum five matches every time.",
+      "The demo pool of 25 could not guarantee five matches for every combination of area, budget, gender preference and non-negotiables. It is now 520 generated profiles with food, habits and pet questions from the v1 form, tested against 1,600 random synthetic users, minimum five matches every time (a stretch tier widens budget or area and is labelled as such).",
     ],
   },
   {

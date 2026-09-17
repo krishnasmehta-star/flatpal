@@ -14,6 +14,22 @@ const AREAS = ["HSR Layout", "Koramangala", "Indiranagar", "BTM Layout", "Bellan
 const BUDGETS = ["under 10k", "10k to 15k", "15k to 20k", "20k to 30k", "30k+"];
 const MOVE_INS = ["ASAP", "within a month", "1 to 3 months", "just exploring"];
 const NON_NEG = ["No smoking indoors", "No pets", "No overnight guests", "Vegetarian kitchen", "Quiet after 11pm"];
+const FOODS = ["Vegetarian", "Eggetarian", "Non-vegetarian", "Vegetarian, fine with non-veg at home"];
+const HABITS = ["Drinking", "420 friendly"];
+const OKAY_WITH = ["Smoking", "Drinking", "420 friendly"];
+const HAS_PET = ["None", "Cat", "Dog", "Other"];
+
+// Client-side resize so a phone photo becomes a ~20KB square JPEG before it leaves the browser.
+async function shrinkPhoto(file, size = 320) {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(bmp.width, bmp.height);
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size;
+  const x = c.getContext("2d");
+  x.imageSmoothingQuality = "high";
+  x.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, size, size);
+  return c.toDataURL("image/jpeg", 0.82);
+}
 
 const SLIDERS = [
   { key: "sleep", label: "Sleep schedule", low: "Early bird", high: "Night owl" },
@@ -25,6 +41,51 @@ const SLIDERS = [
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const DRAFT_KEY = "flatpal.form.v1";
+const EMPTY_FORM = {
+  first_name: "", age: "", gender: "", whatsapp: "", email: "", bio: "",
+  areas: [], budget: "", move_in: "", flatmate_gender_pref: "",
+  lifestyle: { sleep: 3, cleanliness: 3, guests: 3, wfh: 3, noise: 3, cooking: 3 },
+  smoking: "", pets: "", non_negotiables: [],
+  food: "", habits: [], okay_with: ["Drinking"], has_pet: "None", hometown: "", work: "", deal_breakers: "", photo: null,
+};
+const loadDraft = () => {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return { ...EMPTY_FORM, ...d, lifestyle: { ...EMPTY_FORM.lifestyle, ...(d.lifestyle || {}) } };
+  } catch {
+    return null;
+  }
+};
+const saveDraft = (f) => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); } catch {} };
+const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch {} };
+
+export const normalisePhone = (v) => {
+  let d = String(v || "").replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+  if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  return d;
+};
+export const phoneError = (v) => {
+  const d = normalisePhone(v);
+  if (!d) return "Add your WhatsApp number.";
+  if (d.length !== 10) return `Needs 10 digits, you have ${d.length}.`;
+  if (!/^[6-9]/.test(d)) return "Indian mobile numbers start with 6, 7, 8 or 9.";
+  if (/^(\d)\1{9}$/.test(d)) return "That does not look like a real number.";
+  return null;
+};
+export const emailError = (v) => {
+  const e = String(v || "").trim();
+  if (!e) return "Add your email.";
+  if (!/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(e)) return "That email does not look right.";
+  const typo = { "gmail.co": "gmail.com", "gmial.com": "gmail.com", "gmail.cm": "gmail.com", "yahoo.co": "yahoo.com", "hotmail.co": "hotmail.com" };
+  const dom = e.split("@")[1].toLowerCase();
+  if (typo[dom]) return `Did you mean ${e.split("@")[0]}@${typo[dom]}?`;
+  return null;
+};
+const FieldError = ({ msg, id }) => msg ? <p id={id} data-testid={id} className="mt-1 text-sm font-medium text-[#B23A48]">{msg}</p> : null;
 
 const Pill = ({ active, onClick, children, testId }) => (
   <button
@@ -83,12 +144,22 @@ export default function Match() {
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [poolN, setPoolN] = useState(null);
-  const [form, setForm] = useState({
-    first_name: "", age: "", gender: "", whatsapp: "", email: "", bio: "",
-    areas: [], budget: "", move_in: "", flatmate_gender_pref: "",
-    lifestyle: { sleep: 3, cleanliness: 3, guests: 3, wfh: 3, noise: 3, cooking: 3 },
-    smoking: "", pets: "", non_negotiables: [],
-  });
+  const [form, setForm] = useState(() => loadDraft() || EMPTY_FORM);
+  const [hadDraft] = useState(() => !!loadDraft());
+  const [touched, setTouched] = useState({});
+  const markTouched = (k) => setTouched((t) => ({ ...t, [k]: true }));
+  const startFresh = () => { clearDraft(); setForm(EMPTY_FORM); setTouched({}); setStep(0); toast("Cleared. Starting fresh."); };
+
+  useEffect(() => { saveDraft(form); }, [form]);
+
+  const fieldErrors = {
+    first_name: form.first_name.trim() ? null : "Add your first name.",
+    age: (() => { const a = Number(form.age); if (!form.age) return "Add your age."; if (!Number.isInteger(a) || a < 18 || a > 45) return "FlatPal is for 18 to 45 right now."; return null; })(),
+    gender: form.gender ? null : "Pick a gender.",
+    whatsapp: phoneError(form.whatsapp),
+    email: emailError(form.email),
+  };
+  const showErr = (k) => (touched[k] ? fieldErrors[k] : null);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggle = (k, v) =>
@@ -113,13 +184,12 @@ export default function Match() {
   }, [step]);
 
   const validateStep0 = () => {
-    if (!form.first_name.trim()) return "Add your first name.";
-    const age = Number(form.age);
-    if (!age || age < 18 || age > 45) return "Age must be between 18 and 45.";
-    if (!form.gender) return "Pick a gender.";
-    const digits = form.whatsapp.replace(/\D/g, "").replace(/^91/, "");
-    if (!/^[6-9]\d{9}$/.test(digits)) return "Enter a valid 10 digit Indian mobile number.";
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return "Enter a valid email.";
+    const order = ["first_name", "age", "gender", "whatsapp", "email"];
+    const bad = order.find((k) => fieldErrors[k]);
+    if (bad) {
+      setTouched((t) => ({ ...t, first_name: true, age: true, gender: true, whatsapp: true, email: true }));
+      return fieldErrors[bad];
+    }
     return null;
   };
   const validateStep1 = () => {
@@ -130,9 +200,28 @@ export default function Match() {
     return null;
   };
   const validateStep2 = () => {
+    if (!form.food) return "Pick your food preference.";
     if (!form.smoking) return "Pick your smoking preference.";
     if (!form.pets) return "Pick your pets preference.";
+    if (form.has_pet !== "None" && form.pets === "No pets please") return "You have a pet but chose no pets. Pick one.";
     return null;
+  };
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const onPhoto = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return toast.error("That is not an image.");
+    if (f.size > 12 * 1024 * 1024) return toast.error("Photo is over 12MB. Pick a smaller one.");
+    setPhotoBusy(true);
+    try {
+      const dataUrl = await shrinkPhoto(f);
+      set("photo", dataUrl);
+    } catch {
+      toast.error("Could not read that photo. Try another.");
+    } finally {
+      setPhotoBusy(false);
+      e.target.value = "";
+    }
   };
 
   const next = () => {
@@ -148,7 +237,10 @@ export default function Match() {
     setSubmitting(true);
     const start = Date.now();
     try {
-      const payload = { ...form, age: Number(form.age) };
+      const okay = [...form.okay_with];
+      for (const h of form.habits) if (!okay.includes(h)) okay.push(h);
+      if (form.smoking !== "No" && !okay.includes("Smoking")) okay.push("Smoking");
+      const payload = { ...form, okay_with: okay, age: Number(form.age), whatsapp: normalisePhone(form.whatsapp), email: form.email.trim().toLowerCase() };
       const res = await api.post("/profiles", payload);
       const id = res.data.profile_id;
       const m = await api.get(`/matches/${id}`);
@@ -186,6 +278,12 @@ export default function Match() {
           </div>
         </div>
 
+        {hadDraft && step === 0 && (
+          <div className="mb-4 flex flex-col gap-2 rounded-xl border-2 border-[#2E3340] bg-[#B8F2E6] px-4 py-3 text-sm text-[#2E3340] sm:flex-row sm:items-center sm:justify-between" data-testid="draft-banner">
+            <span className="font-semibold">Welcome back. We kept your answers from last time.</span>
+            <button type="button" onClick={startFresh} data-testid="start-fresh" className="text-left font-semibold underline underline-offset-4">Start fresh</button>
+          </div>
+        )}
         <div ref={cardRef} className="space-y-6 rounded-2xl border hard bg-white p-6 sm:p-8">
           {step === 0 && (
             <>
@@ -195,22 +293,53 @@ export default function Match() {
                   Just browsing? See a sample result
                 </Link>
               </div>
-              <Field label="First name" required><div data-anim-field><Input data-testid="input-first-name" value={form.first_name} onChange={(e) => set("first_name", e.target.value)} placeholder="Your first name" className="h-12 rounded-xl" /></div></Field>
-              <Field label="Age" required><div data-anim-field><Input data-testid="input-age" type="number" min={18} max={45} value={form.age} onChange={(e) => set("age", e.target.value)} placeholder="18 to 45" className="h-12 rounded-xl" /></div></Field>
+              <Field label="First name" required><div data-anim-field><Input data-testid="input-first-name" value={form.first_name} onBlur={() => markTouched("first_name")} onChange={(e) => set("first_name", e.target.value)} placeholder="Your first name" className="h-12 rounded-xl" aria-invalid={!!showErr("first_name")} /><FieldError id="err-first-name" msg={showErr("first_name")} /></div></Field>
+              <Field label="Age" required><div data-anim-field><Input data-testid="input-age" type="number" inputMode="numeric" min={18} max={45} value={form.age} onBlur={() => markTouched("age")} onChange={(e) => set("age", e.target.value)} placeholder="18 to 45" className="h-12 rounded-xl" aria-invalid={!!showErr("age")} /><FieldError id="err-age" msg={showErr("age")} /></div></Field>
               <Field label="Gender" required>
                 <div data-anim-field>
                   <Select value={form.gender} onValueChange={(v) => set("gender", v)}>
                     <SelectTrigger data-testid="select-gender" className="h-12 rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>{["Woman", "Man", "Non-binary", "Prefer not to say"].map((g) => <SelectItem key={g} value={g} data-testid={`gender-opt-${g}`}>{g}</SelectItem>)}</SelectContent>
                   </Select>
+                  <FieldError id="err-gender" msg={showErr("gender")} />
                 </div>
               </Field>
-              <Field label="WhatsApp number" required><div data-anim-field><Input data-testid="input-whatsapp" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="10 digit mobile" className="h-12 rounded-xl" /></div></Field>
-              <Field label="Email" required><div data-anim-field><Input data-testid="input-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="you@email.com" className="h-12 rounded-xl" /></div></Field>
+              <Field label="WhatsApp number" required>
+                <div data-anim-field>
+                  <div className="flex items-stretch">
+                    <span className="flex items-center rounded-l-xl border-2 border-r-0 border-[#2E3340]/40 bg-[#FAF3DD] px-3 text-sm font-semibold text-[#2E3340]">+91</span>
+                    <Input data-testid="input-whatsapp" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={16} value={form.whatsapp} onBlur={() => markTouched("whatsapp")} onChange={(e) => set("whatsapp", e.target.value.replace(/[^\d\s+-]/g, ""))} placeholder="10 digit mobile" className="h-12 rounded-l-none rounded-r-xl" aria-invalid={!!showErr("whatsapp")} />
+                  </div>
+                  <FieldError id="err-whatsapp" msg={showErr("whatsapp")} />
+                  {!showErr("whatsapp") && <p className="mt-1 text-xs text-[#2E3340]/70">Only shared with your top matches, never shown publicly.</p>}
+                </div>
+              </Field>
+              <Field label="Email" required><div data-anim-field><Input data-testid="input-email" type="email" inputMode="email" autoComplete="email" value={form.email} onBlur={() => markTouched("email")} onChange={(e) => set("email", e.target.value)} placeholder="you@email.com" className="h-12 rounded-xl" aria-invalid={!!showErr("email")} /><FieldError id="err-email" msg={showErr("email")} /></div></Field>
               <Field label="One line about you">
                 <div data-anim-field>
                   <Input data-testid="input-bio" maxLength={120} value={form.bio} onChange={(e) => set("bio", e.target.value)} placeholder="Optional, max 120 characters" className="h-12 rounded-xl" />
                   <p className="mt-1 text-xs text-[#2E3340]">{form.bio.length}/120</p>
+                </div>
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Hometown"><div data-anim-field><Input data-testid="input-hometown" maxLength={40} value={form.hometown} onChange={(e) => set("hometown", e.target.value)} placeholder="Optional" className="h-12 rounded-xl" /></div></Field>
+                <Field label="What do you do"><div data-anim-field><Input data-testid="input-work" maxLength={60} value={form.work} onChange={(e) => set("work", e.target.value)} placeholder="Optional, e.g. Product designer at a startup" className="h-12 rounded-xl" /></div></Field>
+              </div>
+              <Field label="A photo of you">
+                <div data-anim-field className="flex items-center gap-4">
+                  {form.photo ? (
+                    <img src={form.photo} alt="Your photo" data-testid="photo-preview" className="h-16 w-16 rounded-xl border-2 border-[#2E3340] object-cover" />
+                  ) : (
+                    <span className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-[#2E3340]/40 text-xs text-[#2E3340]/60">No photo</span>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <label className="inline-flex w-fit cursor-pointer items-center rounded-[6px] border-2 border-[#2E3340] bg-[#FAF3DD] px-4 py-2 text-sm font-semibold text-[#2E3340] hover:bg-[#B8F2E6]">
+                      {photoBusy ? "Resizing..." : form.photo ? "Change photo" : "Add a photo"}
+                      <input type="file" accept="image/*" data-testid="input-photo" className="hidden" onChange={onPhoto} />
+                    </label>
+                    {form.photo && <button type="button" data-testid="remove-photo" onClick={() => set("photo", null)} className="w-fit text-xs font-medium underline underline-offset-4">Remove</button>}
+                    <p className="text-xs text-[#2E3340]/70">Optional. Shown only to your top matches, never public. Profiles with a photo get replied to more.</p>
+                  </div>
                 </div>
               </Field>
             </>
@@ -262,9 +391,27 @@ export default function Match() {
                   </div>
                 </div>
               ))}
+              <Field label="Food" required>
+                <div data-anim-field className="flex flex-wrap gap-2">
+                  {FOODS.map((v) => <Pill key={v} testId={`food-${v}`} active={form.food === v} onClick={() => set("food", v)}>{v}</Pill>)}
+                </div>
+              </Field>
               <Field label="Smoking" required>
                 <div data-anim-field className="flex flex-wrap gap-2">
                   {["No", "Outside only", "Yes"].map((v) => <Pill key={v} testId={`smoking-${v}`} active={form.smoking === v} onClick={() => set("smoking", v)}>{v}</Pill>)}
+                </div>
+              </Field>
+              <Field label="You (tick what applies)">
+                <div data-anim-field className="flex flex-wrap gap-2">
+                  {HABITS.map((v) => <Pill key={v} testId={`habit-${v}`} active={form.habits.includes(v)} onClick={() => toggle("habits", v)}>{v === "Drinking" ? "I drink" : "I am 420 friendly"}</Pill>)}
+                </div>
+              </Field>
+              <Field label="Okay with flatmates who">
+                <div data-anim-field>
+                  <div className="flex flex-wrap gap-2">
+                    {OKAY_WITH.map((v) => <Pill key={v} testId={`okay-${v}`} active={form.okay_with.includes(v)} onClick={() => toggle("okay_with", v)}>{{ Smoking: "Smoke", Drinking: "Drink", "420 friendly": "Are 420 friendly" }[v]}</Pill>)}
+                  </div>
+                  <p className="mt-1 text-xs text-[#2E3340]/70">Untick anything that is a no for you. We only match you with people whose habits you are okay with, and the other way round.</p>
                 </div>
               </Field>
               <Field label="Pets" required>
@@ -272,9 +419,20 @@ export default function Match() {
                   {["Love them", "Fine with them", "No pets please"].map((v) => <Pill key={v} testId={`pets-${v}`} active={form.pets === v} onClick={() => set("pets", v)}>{v}</Pill>)}
                 </div>
               </Field>
+              <Field label="Do you have a pet">
+                <div data-anim-field className="flex flex-wrap gap-2">
+                  {HAS_PET.map((v) => <Pill key={v} testId={`haspet-${v}`} active={form.has_pet === v} onClick={() => set("has_pet", v)}>{v === "None" ? "No pet" : v}</Pill>)}
+                </div>
+              </Field>
               <Field label="Non-negotiables">
                 <div data-anim-field className="flex flex-wrap gap-2">
                   {NON_NEG.map((v) => <Pill key={v} testId={`nonneg-${v}`} active={form.non_negotiables.includes(v)} onClick={() => toggle("non_negotiables", v)}>{v}</Pill>)}
+                </div>
+              </Field>
+              <Field label="Deal breakers, pet peeves, what you are looking for">
+                <div data-anim-field>
+                  <textarea data-testid="input-dealbreakers" maxLength={240} rows={3} value={form.deal_breakers} onChange={(e) => set("deal_breakers", e.target.value)} placeholder="Optional. e.g. Dishes done same day. No loud calls after 11. Someone who says hi in the mornings." className="w-full rounded-xl border-2 border-[#2E3340]/40 bg-white px-3 py-2 text-base text-[#2E3340] focus:border-[#2E3340] focus:outline-none" />
+                  <p className="mt-1 text-xs text-[#2E3340]">{form.deal_breakers.length}/240</p>
                 </div>
               </Field>
             </>
