@@ -43,14 +43,28 @@ OVERLAP_JS = """
 """
 
 
-async def fill_form(page, name, gender, areas, budget, move_in, pref, smoking, pets, wa, email, scroll_between_steps=False):
+PHOTO_PATH = "/home/claude/flatpal/qa/test-photo.jpg"
+
+
+async def fill_form(page, name, gender, areas, budget, move_in, pref, smoking, pets, wa, email, scroll_between_steps=False,
+                    food="Non-vegetarian", habits=(), okay=(), has_pet=None, hometown="", work="", photo=False, deal_breakers=""):
     await page.goto(f"{BASE}/match")
+    await page.evaluate("localStorage.removeItem('flatpal.form.v1')")
+    await page.reload()
+    await page.wait_for_timeout(400)
     await page.get_by_test_id("input-first-name").fill(name)
     await page.get_by_test_id("input-age").fill("27")
     await page.get_by_test_id("select-gender").click()
     await page.get_by_role("option", name=gender, exact=True).click()
     await page.get_by_test_id("input-whatsapp").fill(wa)
     await page.get_by_test_id("input-email").fill(email)
+    if hometown:
+        await page.get_by_test_id("input-hometown").fill(hometown)
+    if work:
+        await page.get_by_test_id("input-work").fill(work)
+    if photo:
+        await page.get_by_test_id("input-photo").set_input_files(PHOTO_PATH)
+        await page.get_by_test_id("photo-preview").wait_for(timeout=5000)
     await page.get_by_test_id("next-btn").click()
     # Step 2 must be visible WITHOUT scrolling
     await page.wait_for_timeout(600)
@@ -66,8 +80,18 @@ async def fill_form(page, name, gender, areas, budget, move_in, pref, smoking, p
     await page.get_by_test_id("next-btn").click()
     await page.wait_for_timeout(600)
     step3_visible = await page.get_by_test_id("slider-sleep").is_visible()
+    await page.get_by_test_id(f"food-{food}").click()
     await page.get_by_test_id(f"smoking-{smoking}").click()
+    for h in habits:
+        await page.get_by_test_id(f"habit-{h}").click()
+    for o in okay:
+        await page.get_by_test_id(f"okay-{o}").click()
     await page.get_by_test_id(f"pets-{pets}").click()
+    if has_pet:
+        await page.wait_for_timeout(300)
+        await page.get_by_test_id(f"haspet-{has_pet}").click()
+    if deal_breakers:
+        await page.get_by_test_id("input-dealbreakers").fill(deal_breakers)
     t0 = time.time()
     await page.get_by_test_id("submit-btn").click()
     await page.wait_for_url("**/results/**", timeout=15000)
@@ -117,7 +141,7 @@ async def main():
         await page2.close()
 
         # Form flow without scrolling between steps
-        s2, s3, elapsed = await fill_form(page, "QA One", "Woman", ["HSR Layout", "Koramangala"], "15k to 20k", "within a month", "Any", "No", "Fine with them", "9000000001", "qa1@example.com")
+        s2, s3, elapsed = await fill_form(page, "QA One", "Woman", ["HSR Layout", "Koramangala"], "15k to 20k", "within a month", "Any", "No", "Fine with them", "9000000001", "qa1@example.com", hometown="Pune", work="Product designer", photo=True, habits=("Drinking",), deal_breakers="No loud parties on weekdays")
         check("step 2 content visible immediately (no scroll)", s2)
         check("step 3 sliders visible immediately (no scroll)", s3)
         check("submit took >= 0.9s (earned feel)", elapsed >= 0.85, f"{elapsed:.2f}s")
@@ -147,12 +171,77 @@ async def main():
         # Second profile matches first with WhatsApp link
         await fill_form(page, "QA Two", "Man", ["HSR Layout"], "15k to 20k", "within a month", "Any", "No", "Fine with them", "9000000002", "qa2@example.com")
         await page.wait_for_timeout(2500)
+        api2 = await page.evaluate(f"fetch('/api/matches/{page.url.split('/')[-1]}').then(r=>r.json())")
         names = await page.locator('[data-testid^="match-card-"] h3').all_inner_texts()
         check("second profile sees first profile", any(n.startswith("QA One") for n in names), str(names))
         wa = await page.locator('a[href*="wa.me/919000000001"]').count()
         check("real WhatsApp link present for real match", wa >= 1, str(wa))
+        real_idx = next((k for k, n in enumerate(names) if n.startswith("QA One")), None)
+        if real_idx is not None:
+            check("real user card never gets a stock avatar", (await page.locator(f'[data-testid="avatar-{real_idx + 1}"]').count()) == 0)
+            check("real user's uploaded photo shown", (await page.locator(f'[data-testid="photo-{real_idx + 1}"]').count()) == 1)
+            meta = await page.get_by_test_id(f"meta-{real_idx + 1}").inner_text()
+            check("work + hometown meta line", "Product designer" in meta and "Pune" in meta, meta)
+            card_txt = await page.get_by_test_id(f"match-card-{real_idx + 1}").inner_text()
+            check("deal breakers shown on card", "loud parties" in card_txt, card_txt[:120])
+        check("edit answers link on results", await page.get_by_test_id("edit-answers").is_visible())
         disabled = await page.locator('button[data-testid^="whatsapp-btn-"][disabled]').count()
         check("demo WhatsApp buttons disabled", disabled >= 1, str(disabled))
+
+        # Step 3 validation: food required, pet conflict
+        await page.goto(f"{BASE}/match")
+        await page.evaluate("localStorage.removeItem('flatpal.form.v1')")
+        await page.reload()
+        await page.wait_for_timeout(400)
+        await page.get_by_test_id("input-first-name").fill("Val")
+        await page.get_by_test_id("input-age").fill("30")
+        await page.get_by_test_id("select-gender").click()
+        await page.get_by_role("option", name="Man", exact=True).click()
+        await page.get_by_test_id("input-whatsapp").fill("9000000009")
+        await page.get_by_test_id("input-email").fill("val@example.com")
+        await page.get_by_test_id("next-btn").click()
+        await page.wait_for_timeout(400)
+        await page.get_by_test_id("area-Indiranagar").click()
+        await page.get_by_test_id("select-budget").click()
+        await page.get_by_role("option", name="20k to 30k", exact=True).click()
+        await page.get_by_test_id("select-movein").click()
+        await page.get_by_role("option", name="within a month", exact=True).click()
+        await page.get_by_test_id("select-genderpref").click()
+        await page.get_by_role("option", name="Any", exact=True).click()
+        await page.get_by_test_id("next-btn").click()
+        await page.wait_for_timeout(400)
+        await page.get_by_test_id("smoking-No").click()
+        await page.get_by_test_id("pets-Fine with them").click()
+        await page.get_by_test_id("submit-btn").click()
+        await page.wait_for_timeout(500)
+        check("food is required on step 3", "Step 3 of 3" in (await page.locator("body").inner_text()))
+        await page.get_by_test_id("food-Vegetarian").click()
+        await page.get_by_test_id("pets-No pets please").click()
+        await page.wait_for_timeout(300)
+        await page.get_by_test_id("haspet-Dog").click()
+        await page.get_by_test_id("submit-btn").click()
+        await page.wait_for_timeout(500)
+        check("own pet vs no-pets conflict blocks submit", "Step 3 of 3" in (await page.locator("body").inner_text()))
+        await page.wait_for_timeout(300)
+        await page.get_by_test_id("haspet-None").click()
+        await page.wait_for_timeout(300)
+        await page.get_by_test_id("submit-btn").click()
+        await page.wait_for_url("**/results/**", timeout=15000)
+        await page.wait_for_timeout(1500)
+        check("vegetarian user still gets 5 cards", (await page.locator('[data-testid^="match-card-"]').count()) == 5)
+
+        # Narrow combo: 420 friendly + niche area + low budget still returns five (stretch tier allowed)
+        await fill_form(page, "QA Narrow", "Woman", ["Electronic City"], "under 10k", "ASAP", "Women only", "Yes", "No pets please", "9000000003", "qa3@example.com", food="Vegetarian", habits=("420 friendly",), okay=("420 friendly",))
+        await page.wait_for_timeout(2000)
+        n_cards = await page.locator('[data-testid^="match-card-"]').count()
+        check("narrow combo still returns five", n_cards == 5, str(n_cards))
+        api3 = await page.evaluate(f"fetch('/api/matches/{page.url.split('/')[-1]}').then(r=>r.json())")
+        stretch_api = [bool(x.get("stretch")) for x in api3["matches"]]
+        stretch_ui = await page.locator('[data-testid^="stretch-"]').count()
+        check("stretch banners match API", stretch_ui == sum(stretch_api), f"ui={stretch_ui} api={stretch_api}")
+        check("exact matches listed before stretch", stretch_api == sorted(stretch_api), str(stretch_api))
+        check("narrow combo matches are all women", all(x["gender"] == "Woman" for x in api3["matches"]), str([x["gender"] for x in api3["matches"]]))
+        check("example.com profiles flagged as test", api3.get("is_test") is True, str(api3.get("is_test")))
 
         # Sample route
         await page.goto(f"{BASE}/sample")
@@ -164,6 +253,14 @@ async def main():
         names = await page.locator('[data-testid^="match-card-"] h3').all_inner_texts()
         check("sample personas never appear as matches", not any(n.startswith("Sample") for n in names), str(names))
         check("sample has 5 cards", (await page.locator('[data-testid^="match-card-"]').count()) == 5)
+        av = await page.locator('[data-testid^="avatar-"]').count()
+        binary = await page.evaluate("[...document.querySelectorAll('[data-testid^=match-card-] p.text-sm')].filter(p => /^(Woman|Man)$/.test(p.innerText.trim())).length")
+        check("demo Woman/Man cards all show avatars (pool of 32)", av == binary and av >= 1, f"avatars={av} binary={binary}")
+        av_ok = await page.evaluate("[...document.querySelectorAll('[data-testid^=avatar-]')].every(i => i.complete && i.naturalWidth > 0)")
+        check("avatar images load", av_ok)
+        pairs = await page.evaluate("[...document.querySelectorAll('[data-testid^=avatar-]')].map(i => [i.dataset.gender, i.getAttribute('src')])")
+        check("avatars match card gender", all((g == 'Woman' and '/avatars/w' in s) or (g == 'Man' and '/avatars/m' in s) for g, s in pairs), str(pairs))
+        check("no avatar repeated on one page", len(set(s for _, s in pairs)) == len(pairs), str(pairs))
 
         # About + Built pages
         await page.goto(f"{BASE}/about")
@@ -171,7 +268,14 @@ async def main():
         await page.mouse.wheel(0, 3000)
         await page.wait_for_timeout(1500)
         check("about fully visible", len(await page.evaluate(LOW_OPACITY_JS)) == 0)
-        check("about timeline rows", (await page.locator('[data-testid^="timeline-row-"]').count()) == 3)
+        check("about timeline rows", (await page.locator('[data-testid^="timeline-row-"]').count()) == 4)
+        about_txt = await page.locator("body").inner_text()
+        check("about has contact details", "krishna.s.mehta@gmail.com" in about_txt and "98696 51116" in about_txt)
+        check("about links v1 site and notion", (await page.locator('a[href="https://flatpal.godaddysites.com/"]').count()) >= 1 and (await page.locator('a[href*="notion.site"]').count()) >= 1)
+        imgs_ok = await page.evaluate("[...document.querySelectorAll('main img')].every(i => i.complete && i.naturalWidth > 0)")
+        check("about images all load", imgs_ok)
+        check("footer credit is Krishna only", "Built by Krishna Mehta" in about_txt and "Krishna Mehta & Kritika" not in about_txt)
+        check("no em dash on about", "\u2014" not in about_txt)
         await page.goto(f"{BASE}/built-on-emergent")
         await page.wait_for_timeout(1000)
         check("built page has 5 sections", (await page.locator('[data-testid^="emergent-section-"]').count()) == 5)
@@ -194,6 +298,23 @@ async def main():
         await page.get_by_test_id("next-btn").click()
         await page.wait_for_timeout(500)
         check("invalid phone blocks step 1", "Step 1 of 3" in (await page.locator("body").inner_text()))
+        check("inline phone error shown", await page.get_by_test_id("err-whatsapp").is_visible(), await page.get_by_test_id("err-whatsapp").inner_text())
+        await page.get_by_test_id("input-email").fill("someone@gmial.com")
+        await page.get_by_test_id("input-email").blur()
+        await page.wait_for_timeout(200)
+        check("email typo suggestion", "gmail.com" in (await page.get_by_test_id("err-email").inner_text()))
+        await page.get_by_test_id("input-whatsapp").fill("+91 98765 43210")
+        await page.get_by_test_id("input-email").fill("ok@example.com")
+        await page.wait_for_timeout(200)
+        check("normalised phone accepted", (await page.get_by_test_id("err-whatsapp").count()) == 0)
+        # Prefill on re-entry
+        await page.reload()
+        await page.wait_for_timeout(1200)
+        check("draft prefilled after reload", (await page.get_by_test_id("input-first-name").input_value()) == "Bad" and (await page.get_by_test_id("input-email").input_value()) == "ok@example.com")
+        check("draft banner shown", await page.get_by_test_id("draft-banner").is_visible())
+        await page.get_by_test_id("start-fresh").click()
+        await page.wait_for_timeout(300)
+        check("start fresh clears form", (await page.get_by_test_id("input-first-name").input_value()) == "")
 
         # Mobile viewport
         m = await browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
