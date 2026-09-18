@@ -9,7 +9,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 // Every number on this page comes from Krishna's resume, the FlatPal build log of 17 Sep 2026, or Emergent's own JD.
 // QA_CHECKS is the number of checks in qa/e2e.py. Update it when checks are added.
-const QA_CHECKS = 97;
+const QA_CHECKS = 98;
 const REPO_URL = "https://github.com/krishnasmehta-star/flatpal";
 const EMAIL = "krishna.s.mehta@gmail.com";
 const PHONE_DISPLAY = "+91 98696 51116";
