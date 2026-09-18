@@ -385,7 +385,7 @@ async def main():
         sw = await mp.evaluate("document.documentElement.scrollWidth")
         check("mobile: built page no horizontal scroll at 375", sw <= 375, str(sw))
         tiles = await mp.evaluate("[...document.querySelectorAll('[data-testid=\"emergent-stat\"]')].map(e => e.getBoundingClientRect().top)")
-        check("mobile: stat tiles wrap two per row", len(tiles) == 4 and abs(tiles[0] - tiles[1]) < 2 and tiles[2] - tiles[0] > 40, str(tiles))
+        check("mobile: stat tiles wrap two per row", len(tiles) == 6 and all(abs(tiles[i] - tiles[i + 1]) < 2 for i in (0, 2, 4)) and tiles[2] - tiles[0] > 40 and tiles[4] - tiles[2] > 40, str(tiles))
         rowh = await mp.evaluate("document.querySelector('[data-testid=\"emergent-build-1\"]').getBoundingClientRect().height")
         check("mobile: credits table stacks", rowh > 90, str(rowh))
         await mp.set_viewport_size({"width": 390, "height": 844})
