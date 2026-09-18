@@ -1,5 +1,6 @@
 
-import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, HashRouter, Routes, Route, useLocation } from "react-router-dom";
 
 // eslint-disable-next-line no-undef
 const Router = typeof __STATIC_PREVIEW__ !== "undefined" && __STATIC_PREVIEW__ ? HashRouter : BrowserRouter;
@@ -12,6 +13,15 @@ import About from "@/pages/About";
 import BuiltOnEmergent from "@/pages/BuiltOnEmergent";
 import Sample from "@/pages/Sample";
 
+// Start every route at the top unless the URL carries a hash (About uses #why-emergent).
+function ScrollToTop() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [pathname, hash]);
+  return null;
+}
+
 function App() {
   return (
     <div className="App">
@@ -21,6 +31,7 @@ function App() {
         </div>
       )}
       <Router>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/match" element={<Match />} />
